@@ -45,9 +45,10 @@ class Settings(BaseSettings):
         return v
     
     # LLM APIs
-    OPENAI_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
-    GOOGLE_API_KEY: Optional[str] = None
+    OPENROUTER_API_KEY: Optional[str] = None  # Primary: unified gateway for all models
+    OPENAI_API_KEY: Optional[str] = None  # Optional: direct OpenAI access
+    ANTHROPIC_API_KEY: Optional[str] = None  # Optional: direct Anthropic access
+    GOOGLE_API_KEY: Optional[str] = None  # Optional: direct Google access
     YANDEX_API_KEY: Optional[str] = None
     YANDEX_FOLDER_ID: Optional[str] = None
     

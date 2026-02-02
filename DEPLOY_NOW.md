@@ -32,15 +32,13 @@ SECRET_KEY=XjLcs930XeToeCqKQG9EFMPO0YOqPPHIg_YNBNqHNVU
 JWT_SECRET_KEY=21bc50f42a06b8110b7cad0d8fc686b1f508eb6b7ea0145b91962d32dce3c125
 DATABASE_URL=postgresql+asyncpg://postgres:gqymLKnzKXkfZJjcBWqeucumzqBGfuwu@shuttle.proxy.rlwy.net:10648/railway
 REDIS_URL=redis://default:FmvEuttDGzulaXNXozSQFPAaxhybIeAX@trolley.proxy.rlwy.net:52705
+OPENROUTER_API_KEY=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
 CORS_ORIGINS=http://localhost:8888
 APP_ENV=production
 DEBUG=False
 ```
 
-⚠️ **ВАЖНО:** Если у вас есть OpenAI ключ, добавьте его сейчас:
-```
-OPENAI_API_KEY=sk-ваш_ключ_openai
-```
+✅ **OpenRouter ключ уже добавлен!** Доступ ко всем LLM моделям (GPT-4, Claude, Gemini и др.) через один ключ.
 
 **Нажмите "Save"** - Railway автоматически перезапустит приложение.
 
@@ -131,22 +129,23 @@ https://your-app-name.railway.app/api/v1
 
 ## 🔗 Следующие шаги
 
-### 1. Получите LLM API ключи
+### 1. LLM API ключ уже настроен! ✅
 
-Для работы чата нужен хотя бы один:
+У вас уже есть **OpenRouter API ключ**, который дает доступ ко ВСЕМ моделям:
 
-**OpenAI (рекомендуется для начала):**
-1. https://platform.openai.com/api-keys
-2. Create new secret key
-3. Скопируйте ключ (начинается с `sk-`)
-4. Добавьте в Railway Variables: `OPENAI_API_KEY=sk-...`
-5. Положите $5-10 на баланс
+✅ GPT-4, GPT-3.5 (OpenAI)  
+✅ Claude 3 Opus, Sonnet, Haiku (Anthropic)  
+✅ Gemini Pro (Google)  
+✅ Llama 3 (Meta)  
+✅ И многие другие!
 
-**Anthropic (Claude):**
-- https://console.anthropic.com/settings/keys
+**Преимущества OpenRouter:**
+- 🔑 Один ключ для всех моделей
+- 💰 Оплата только за использование
+- 🔄 Легкое переключение между моделями
+- 📊 Единая панель мониторинга
 
-**Google (Gemini):**
-- https://makersuite.google.com/app/apikey
+Сайт: https://openrouter.ai/
 
 ### 2. Подключите фронтенд
 

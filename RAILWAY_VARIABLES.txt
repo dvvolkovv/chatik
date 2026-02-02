@@ -16,17 +16,20 @@ REDIS_URL=redis://default:FmvEuttDGzulaXNXozSQFPAaxhybIeAX@trolley.proxy.rlwy.ne
 
 ⚠️ ВАЖНО: Обратите внимание на `postgresql+asyncpg://` вместо `postgresql://`
 
-### 3. LLM API ключи (НУЖНО ПОЛУЧИТЬ)
+### 3. LLM API ключ (ГОТОВ!)
 ```
-OPENAI_API_KEY=sk-ваш_ключ_openai
-ANTHROPIC_API_KEY=sk-ant-ваш_ключ_anthropic
-GOOGLE_API_KEY=AIza-ваш_ключ_google
+OPENROUTER_API_KEY=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
 ```
 
-Где получить:
-- OpenAI: https://platform.openai.com/api-keys
-- Anthropic: https://console.anthropic.com/settings/keys
-- Google: https://makersuite.google.com/app/apikey
+✅ **OpenRouter** - это единый шлюз для всех LLM моделей:
+- GPT-4, GPT-3.5 (OpenAI)
+- Claude 3 Opus, Sonnet, Haiku (Anthropic)
+- Gemini Pro (Google)
+- Llama 3 (Meta)
+- И многие другие!
+
+Один ключ → доступ ко всем моделям!
+Сайт: https://openrouter.ai/
 
 ### 4. CORS (после деплоя фронтенда)
 ```
@@ -77,7 +80,7 @@ railway variables set SECRET_KEY="XjLcs930XeToeCqKQG9EFMPO0YOqPPHIg_YNBNqHNVU"
 railway variables set JWT_SECRET_KEY="21bc50f42a06b8110b7cad0d8fc686b1f508eb6b7ea0145b91962d32dce3c125"
 railway variables set DATABASE_URL="postgresql+asyncpg://postgres:gqymLKnzKXkfZJjcBWqeucumzqBGfuwu@shuttle.proxy.rlwy.net:10648/railway"
 railway variables set REDIS_URL="redis://default:FmvEuttDGzulaXNXozSQFPAaxhybIeAX@trolley.proxy.rlwy.net:52705"
-railway variables set OPENAI_API_KEY="sk-ваш_ключ"
+railway variables set OPENROUTER_API_KEY="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"
 railway variables set CORS_ORIGINS="http://localhost:8888"
 railway variables set APP_ENV="production"
 railway variables set DEBUG="False"
@@ -96,7 +99,7 @@ SECRET_KEY=XjLcs930XeToeCqKQG9EFMPO0YOqPPHIg_YNBNqHNVU
 JWT_SECRET_KEY=21bc50f42a06b8110b7cad0d8fc686b1f508eb6b7ea0145b91962d32dce3c125
 DATABASE_URL=postgresql+asyncpg://postgres:gqymLKnzKXkfZJjcBWqeucumzqBGfuwu@shuttle.proxy.rlwy.net:10648/railway
 REDIS_URL=redis://default:FmvEuttDGzulaXNXozSQFPAaxhybIeAX@trolley.proxy.rlwy.net:52705
-OPENAI_API_KEY=sk-ваш_ключ
+OPENROUTER_API_KEY=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
 CORS_ORIGINS=http://localhost:8888,http://localhost:3000
 APP_ENV=development
 DEBUG=True

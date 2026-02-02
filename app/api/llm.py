@@ -230,54 +230,81 @@ async def send_message_stream(
 @router.get("/models")
 async def get_available_models():
     """
-    Get list of available LLM models
+    Get list of available LLM models via OpenRouter
     """
     models = [
         {
-            "id": "gpt-4-turbo",
+            "id": "openai/gpt-4-turbo",
             "name": "GPT-4 Turbo",
-            "provider": "openai",
-            "price_input": 0.01,  # per 1K tokens
+            "provider": "OpenAI (via OpenRouter)",
+            "price_input": 0.01,  # per 1K tokens USD
             "price_output": 0.03,
             "context_length": 128000,
             "capabilities": ["text", "vision"],
         },
         {
-            "id": "gpt-3.5-turbo",
+            "id": "openai/gpt-3.5-turbo",
             "name": "GPT-3.5 Turbo",
-            "provider": "openai",
+            "provider": "OpenAI (via OpenRouter)",
             "price_input": 0.0015,
             "price_output": 0.002,
             "context_length": 16385,
             "capabilities": ["text"],
         },
         {
-            "id": "claude-3-opus",
+            "id": "anthropic/claude-3-opus",
             "name": "Claude 3 Opus",
-            "provider": "anthropic",
+            "provider": "Anthropic (via OpenRouter)",
             "price_input": 0.015,
             "price_output": 0.075,
             "context_length": 200000,
             "capabilities": ["text", "vision"],
         },
         {
-            "id": "claude-3-sonnet",
+            "id": "anthropic/claude-3-sonnet",
             "name": "Claude 3 Sonnet",
-            "provider": "anthropic",
+            "provider": "Anthropic (via OpenRouter)",
             "price_input": 0.003,
             "price_output": 0.015,
             "context_length": 200000,
             "capabilities": ["text", "vision"],
         },
         {
-            "id": "gemini-pro",
-            "name": "Gemini Pro",
-            "provider": "google",
+            "id": "anthropic/claude-3-haiku",
+            "name": "Claude 3 Haiku",
+            "provider": "Anthropic (via OpenRouter)",
             "price_input": 0.00025,
-            "price_output": 0.0005,
-            "context_length": 32000,
+            "price_output": 0.00125,
+            "context_length": 200000,
             "capabilities": ["text", "vision"],
+        },
+        {
+            "id": "google/gemini-pro-1.5",
+            "name": "Gemini Pro 1.5",
+            "provider": "Google (via OpenRouter)",
+            "price_input": 0.0005,
+            "price_output": 0.0015,
+            "context_length": 1000000,
+            "capabilities": ["text", "vision"],
+        },
+        {
+            "id": "meta-llama/llama-3-70b-instruct",
+            "name": "Llama 3 70B",
+            "provider": "Meta (via OpenRouter)",
+            "price_input": 0.00059,
+            "price_output": 0.00079,
+            "context_length": 8192,
+            "capabilities": ["text"],
+        },
+        {
+            "id": "meta-llama/llama-3-8b-instruct",
+            "name": "Llama 3 8B",
+            "provider": "Meta (via OpenRouter)",
+            "price_input": 0.00006,
+            "price_output": 0.00006,
+            "context_length": 8192,
+            "capabilities": ["text"],
         },
     ]
     
-    return {"models": models}
+    return {"models": models, "gateway": "OpenRouter"}
