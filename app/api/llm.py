@@ -21,7 +21,7 @@ from app.services.llm_service import LLMService
 router = APIRouter()
 
 
-@router.post("/chat/{chat_id}/message", response_model=MessageResponse)
+@router.post("/chat/{chat_id}/message")
 async def send_message(
     chat_id: str,
     message_data: MessageCreate,
@@ -105,10 +105,28 @@ async def send_message(
         await db.commit()
         await db.refresh(assistant_message)
         
-        return MessageResponse.from_orm(assistant_message)
+        # Convert to response manually to avoid metadata conflict
+        response_data = {
+            "id": str(assistant_message.id),
+            "chat_id": str(assistant_message.chat_id),
+            "role": assistant_message.role.value,
+            "content": assistant_message.content,
+            "model_used": assistant_message.model_used,
+            "tokens_input": assistant_message.tokens_input,
+            "tokens_output": assistant_message.tokens_output,
+            "cost": assistant_message.cost,
+            "attachments": assistant_message.attachments or [],
+            "message_metadata": assistant_message.message_metadata or {},
+            "created_at": assistant_message.created_at.isoformat(),
+        }
+        
+        return response_data
         
     except Exception as e:
         await db.rollback()
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ LLM Error: {error_details}")  # Log to console
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"LLM error: {str(e)}"
@@ -207,10 +225,10 @@ async def send_message_stream(
                 chat.title = message_data.content[:50] + ("..." if len(message_data.content) > 50 else "")
             
             await db.commit()
-            await db.refresh(assistant_message)
+            # No need to refresh - we already have the id
             
-            # Send end event
-            yield f"data: {json.dumps(StreamChunk(type='end', message_id=assistant_message.id, tokens=chunk.get('tokens'), cost=chunk.get('cost')).dict())}\n\n"
+            # Send end event (convert UUID to string)
+            yield f"data: {json.dumps(StreamChunk(type='end', message_id=str(assistant_message.id), tokens=chunk.get('tokens'), cost=chunk.get('cost')).dict())}\n\n"
             
         except Exception as e:
             await db.rollback()
@@ -230,80 +248,245 @@ async def send_message_stream(
 @router.get("/models")
 async def get_available_models():
     """
-    Get list of available LLM models via OpenRouter
+    Get list of available LLM models via OpenRouter (Top 20)
     """
     models = [
+        # Tier 1: Premium Models
+        {
+            "id": "openai/gpt-5.2",
+            "name": "GPT-5.2",
+            "provider": "OpenAI",
+            "price_input": 0.015,  # per 1K tokens USD
+            "price_output": 0.045,
+            "context_length": 256000,
+            "capabilities": ["text", "vision", "reasoning"],
+            "tier": "premium",
+        },
+        {
+            "id": "openai/gpt-5",
+            "name": "GPT-5",
+            "provider": "OpenAI",
+            "price_input": 0.012,  # per 1K tokens USD
+            "price_output": 0.036,
+            "context_length": 200000,
+            "capabilities": ["text", "vision", "reasoning"],
+            "tier": "premium",
+        },
+        {
+            "id": "anthropic/claude-4.5-sonnet",
+            "name": "Claude 4.5 Sonnet",
+            "provider": "Anthropic",
+            "price_input": 0.008,
+            "price_output": 0.024,
+            "context_length": 300000,
+            "capabilities": ["text", "vision", "reasoning"],
+            "tier": "premium",
+        },
         {
             "id": "openai/gpt-4-turbo",
             "name": "GPT-4 Turbo",
-            "provider": "OpenAI (via OpenRouter)",
+            "provider": "OpenAI",
             "price_input": 0.01,  # per 1K tokens USD
             "price_output": 0.03,
             "context_length": 128000,
             "capabilities": ["text", "vision"],
+            "tier": "premium",
         },
         {
-            "id": "openai/gpt-3.5-turbo",
-            "name": "GPT-3.5 Turbo",
-            "provider": "OpenAI (via OpenRouter)",
-            "price_input": 0.0015,
-            "price_output": 0.002,
-            "context_length": 16385,
-            "capabilities": ["text"],
-        },
-        {
-            "id": "anthropic/claude-3-opus",
-            "name": "Claude 3 Opus",
-            "provider": "Anthropic (via OpenRouter)",
-            "price_input": 0.015,
-            "price_output": 0.075,
-            "context_length": 200000,
+            "id": "openai/gpt-4o",
+            "name": "GPT-4o",
+            "provider": "OpenAI",
+            "price_input": 0.005,
+            "price_output": 0.015,
+            "context_length": 128000,
             "capabilities": ["text", "vision"],
+            "tier": "premium",
         },
         {
-            "id": "anthropic/claude-3-sonnet",
-            "name": "Claude 3 Sonnet",
-            "provider": "Anthropic (via OpenRouter)",
+            "id": "anthropic/claude-3.5-sonnet",
+            "name": "Claude 3.5 Sonnet",
+            "provider": "Anthropic",
             "price_input": 0.003,
             "price_output": 0.015,
             "context_length": 200000,
             "capabilities": ["text", "vision"],
+            "tier": "premium",
         },
         {
-            "id": "anthropic/claude-3-haiku",
-            "name": "Claude 3 Haiku",
-            "provider": "Anthropic (via OpenRouter)",
-            "price_input": 0.00025,
-            "price_output": 0.00125,
+            "id": "anthropic/claude-3-opus",
+            "name": "Claude 3 Opus",
+            "provider": "Anthropic",
+            "price_input": 0.015,
+            "price_output": 0.075,
             "context_length": 200000,
             "capabilities": ["text", "vision"],
+            "tier": "premium",
         },
         {
             "id": "google/gemini-pro-1.5",
             "name": "Gemini Pro 1.5",
-            "provider": "Google (via OpenRouter)",
+            "provider": "Google",
+            "price_input": 0.00125,
+            "price_output": 0.005,
+            "context_length": 2000000,
+            "capabilities": ["text", "vision"],
+            "tier": "premium",
+        },
+        
+        # Tier 2: Balanced Models
+        {
+            "id": "openai/gpt-3.5-turbo",
+            "name": "GPT-3.5 Turbo",
+            "provider": "OpenAI",
             "price_input": 0.0005,
             "price_output": 0.0015,
+            "context_length": 16385,
+            "capabilities": ["text"],
+            "tier": "balanced",
+        },
+        {
+            "id": "anthropic/claude-3-sonnet",
+            "name": "Claude 3 Sonnet",
+            "provider": "Anthropic",
+            "price_input": 0.003,
+            "price_output": 0.015,
+            "context_length": 200000,
+            "capabilities": ["text", "vision"],
+            "tier": "balanced",
+        },
+        {
+            "id": "anthropic/claude-3-haiku",
+            "name": "Claude 3 Haiku",
+            "provider": "Anthropic",
+            "price_input": 0.00025,
+            "price_output": 0.00125,
+            "context_length": 200000,
+            "capabilities": ["text", "vision"],
+            "tier": "balanced",
+        },
+        {
+            "id": "google/gemini-flash-1.5",
+            "name": "Gemini Flash 1.5",
+            "provider": "Google",
+            "price_input": 0.000075,
+            "price_output": 0.0003,
             "context_length": 1000000,
             "capabilities": ["text", "vision"],
+            "tier": "balanced",
         },
         {
-            "id": "meta-llama/llama-3-70b-instruct",
-            "name": "Llama 3 70B",
-            "provider": "Meta (via OpenRouter)",
-            "price_input": 0.00059,
-            "price_output": 0.00079,
-            "context_length": 8192,
+            "id": "mistralai/mistral-large",
+            "name": "Mistral Large",
+            "provider": "Mistral AI",
+            "price_input": 0.004,
+            "price_output": 0.012,
+            "context_length": 128000,
             "capabilities": ["text"],
+            "tier": "balanced",
+        },
+        
+        # Tier 3: Budget Models
+        {
+            "id": "meta-llama/llama-3.1-70b-instruct",
+            "name": "Llama 3.1 70B",
+            "provider": "Meta",
+            "price_input": 0.00052,
+            "price_output": 0.00075,
+            "context_length": 131072,
+            "capabilities": ["text"],
+            "tier": "budget",
         },
         {
-            "id": "meta-llama/llama-3-8b-instruct",
-            "name": "Llama 3 8B",
-            "provider": "Meta (via OpenRouter)",
+            "id": "meta-llama/llama-3.1-8b-instruct",
+            "name": "Llama 3.1 8B",
+            "provider": "Meta",
             "price_input": 0.00006,
             "price_output": 0.00006,
-            "context_length": 8192,
+            "context_length": 131072,
             "capabilities": ["text"],
+            "tier": "budget",
+        },
+        {
+            "id": "mistralai/mistral-7b-instruct",
+            "name": "Mistral 7B",
+            "provider": "Mistral AI",
+            "price_input": 0.00006,
+            "price_output": 0.00006,
+            "context_length": 32768,
+            "capabilities": ["text"],
+            "tier": "budget",
+        },
+        {
+            "id": "qwen/qwen-2-72b-instruct",
+            "name": "Qwen 2 72B",
+            "provider": "Alibaba",
+            "price_input": 0.00056,
+            "price_output": 0.00077,
+            "context_length": 32768,
+            "capabilities": ["text"],
+            "tier": "budget",
+        },
+        {
+            "id": "deepseek/deepseek-chat",
+            "name": "DeepSeek Chat",
+            "provider": "DeepSeek",
+            "price_input": 0.00014,
+            "price_output": 0.00028,
+            "context_length": 64000,
+            "capabilities": ["text"],
+            "tier": "budget",
+        },
+        
+        # Tier 4: Specialized Models
+        {
+            "id": "perplexity/llama-3.1-sonar-large-128k-online",
+            "name": "Perplexity Sonar Large (Online)",
+            "provider": "Perplexity",
+            "price_input": 0.001,
+            "price_output": 0.001,
+            "context_length": 127072,
+            "capabilities": ["text", "web-search"],
+            "tier": "specialized",
+        },
+        {
+            "id": "cohere/command-r-plus",
+            "name": "Command R+",
+            "provider": "Cohere",
+            "price_input": 0.003,
+            "price_output": 0.015,
+            "context_length": 128000,
+            "capabilities": ["text"],
+            "tier": "specialized",
+        },
+        {
+            "id": "x-ai/grok-beta",
+            "name": "Grok Beta",
+            "provider": "xAI",
+            "price_input": 0.005,
+            "price_output": 0.015,
+            "context_length": 131072,
+            "capabilities": ["text"],
+            "tier": "specialized",
+        },
+        {
+            "id": "openai/o1-mini",
+            "name": "o1-mini (Reasoning)",
+            "provider": "OpenAI",
+            "price_input": 0.003,
+            "price_output": 0.012,
+            "context_length": 128000,
+            "capabilities": ["text", "reasoning"],
+            "tier": "specialized",
+        },
+        {
+            "id": "anthropic/claude-2.1",
+            "name": "Claude 2.1",
+            "provider": "Anthropic",
+            "price_input": 0.008,
+            "price_output": 0.024,
+            "context_length": 200000,
+            "capabilities": ["text"],
+            "tier": "balanced",
         },
     ]
     

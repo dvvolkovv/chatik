@@ -34,7 +34,7 @@ class ChatResponse(ChatBase):
     user_id: UUID4
     is_deleted: bool
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

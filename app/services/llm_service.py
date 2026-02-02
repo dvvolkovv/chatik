@@ -3,6 +3,7 @@ LLM Service for interacting with various AI models via OpenRouter
 """
 from typing import List, Dict, Any, AsyncGenerator, Optional
 from openai import AsyncOpenAI
+import asyncio
 
 from app.core.config import Settings
 from app.models.message import Message

@@ -41,7 +41,7 @@ class Message(Base):
     attachments = Column(JSONB, default=list)  # [{"file_id": "...", "type": "image"}, ...]
     
     # Additional metadata
-    metadata = Column(JSONB, default=dict)
+    message_metadata = Column(JSONB, default=dict)
     
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     

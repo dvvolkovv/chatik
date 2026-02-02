@@ -32,18 +32,19 @@ class MessageResponse(BaseModel):
     tokens_output: int
     cost: float
     attachments: List[Dict[str, Any]]
-    metadata: Dict[str, Any]
+    message_metadata: Dict[str, Any] = {}
     created_at: datetime
     
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class StreamChunk(BaseModel):
     """Streaming chunk schema"""
     type: str  # "start", "content", "end", "error"
     content: Optional[str] = None
-    message_id: Optional[UUID4] = None
+    message_id: Optional[str] = None  # UUID as string for JSON serialization
     model: Optional[str] = None
     tokens: Optional[Dict[str, int]] = None
     cost: Optional[float] = None

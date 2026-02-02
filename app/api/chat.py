@@ -95,7 +95,38 @@ async def get_chat(
             detail="Chat not found"
         )
     
-    return ChatWithMessages.from_orm(chat)
+    # Convert messages manually to avoid metadata conflict
+    from app.schemas.message import MessageResponse
+    messages = [
+        MessageResponse(
+            id=msg.id,
+            chat_id=msg.chat_id,
+            role=msg.role,
+            content=msg.content,
+            model_used=msg.model_used,
+            tokens_input=msg.tokens_input,
+            tokens_output=msg.tokens_output,
+            cost=msg.cost,
+            attachments=msg.attachments or [],
+            message_metadata=msg.message_metadata or {},
+            created_at=msg.created_at,
+        )
+        for msg in chat.messages
+    ]
+    
+    # Create response
+    chat_response = ChatWithMessages(
+        id=chat.id,
+        user_id=chat.user_id,
+        title=chat.title,
+        is_favorite=chat.is_favorite,
+        is_deleted=chat.is_deleted,
+        created_at=chat.created_at,
+        updated_at=chat.updated_at,
+        messages=messages
+    )
+    
+    return chat_response
 
 
 @router.patch("/{chat_id}", response_model=ChatResponse)
