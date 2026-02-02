@@ -1,0 +1,164 @@
+# ⚙️ Переменные окружения для Railway
+
+## Скопируйте эти переменные в Railway Variables
+
+### 1. Секретные ключи (СГЕНЕРИРОВАНЫ)
+```
+SECRET_KEY=XjLcs930XeToeCqKQG9EFMPO0YOqPPHIg_YNBNqHNVU
+JWT_SECRET_KEY=21bc50f42a06b8110b7cad0d8fc686b1f508eb6b7ea0145b91962d32dce3c125
+```
+
+### 2. База данных (ВАШИ ДАННЫЕ)
+```
+DATABASE_URL=postgresql+asyncpg://postgres:gqymLKnzKXkfZJjcBWqeucumzqBGfuwu@shuttle.proxy.rlwy.net:10648/railway
+REDIS_URL=redis://default:FmvEuttDGzulaXNXozSQFPAaxhybIeAX@trolley.proxy.rlwy.net:52705
+```
+
+⚠️ ВАЖНО: Обратите внимание на `postgresql+asyncpg://` вместо `postgresql://`
+
+### 3. LLM API ключи (НУЖНО ПОЛУЧИТЬ)
+```
+OPENAI_API_KEY=sk-ваш_ключ_openai
+ANTHROPIC_API_KEY=sk-ant-ваш_ключ_anthropic
+GOOGLE_API_KEY=AIza-ваш_ключ_google
+```
+
+Где получить:
+- OpenAI: https://platform.openai.com/api-keys
+- Anthropic: https://console.anthropic.com/settings/keys
+- Google: https://makersuite.google.com/app/apikey
+
+### 4. CORS (после деплоя фронтенда)
+```
+CORS_ORIGINS=http://localhost:8888,https://your-frontend.vercel.app
+```
+
+### 5. Окружение
+```
+APP_ENV=production
+DEBUG=False
+APP_NAME=AI Chat Platform
+API_V1_PREFIX=/api/v1
+HOST=0.0.0.0
+PORT=8000
+```
+
+### 6. JWT настройки
+```
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+```
+
+### 7. Лимиты
+```
+RATE_LIMIT_PER_MINUTE=60
+RATE_LIMIT_PER_HOUR=1000
+```
+
+---
+
+## 📋 Инструкция по добавлению в Railway
+
+### Через Railway UI:
+
+1. Откройте ваш проект на Railway
+2. Выберите Backend сервис
+3. Перейдите в вкладку "Variables"
+4. Нажмите "Raw Editor"
+5. Скопируйте все переменные выше (кроме комментариев)
+6. Вставьте в редактор
+7. Сохраните
+
+### Через Railway CLI:
+
+```bash
+railway variables set SECRET_KEY="XjLcs930XeToeCqKQG9EFMPO0YOqPPHIg_YNBNqHNVU"
+railway variables set JWT_SECRET_KEY="21bc50f42a06b8110b7cad0d8fc686b1f508eb6b7ea0145b91962d32dce3c125"
+railway variables set DATABASE_URL="postgresql+asyncpg://postgres:gqymLKnzKXkfZJjcBWqeucumzqBGfuwu@shuttle.proxy.rlwy.net:10648/railway"
+railway variables set REDIS_URL="redis://default:FmvEuttDGzulaXNXozSQFPAaxhybIeAX@trolley.proxy.rlwy.net:52705"
+railway variables set OPENAI_API_KEY="sk-ваш_ключ"
+railway variables set CORS_ORIGINS="http://localhost:8888"
+railway variables set APP_ENV="production"
+railway variables set DEBUG="False"
+```
+
+---
+
+## 🧪 Тестирование локально
+
+Создайте `.env` файл:
+
+```bash
+cd /Users/dmitry/Downloads/ai-chat-backend
+cat > .env << 'EOF'
+SECRET_KEY=XjLcs930XeToeCqKQG9EFMPO0YOqPPHIg_YNBNqHNVU
+JWT_SECRET_KEY=21bc50f42a06b8110b7cad0d8fc686b1f508eb6b7ea0145b91962d32dce3c125
+DATABASE_URL=postgresql+asyncpg://postgres:gqymLKnzKXkfZJjcBWqeucumzqBGfuwu@shuttle.proxy.rlwy.net:10648/railway
+REDIS_URL=redis://default:FmvEuttDGzulaXNXozSQFPAaxhybIeAX@trolley.proxy.rlwy.net:52705
+OPENAI_API_KEY=sk-ваш_ключ
+CORS_ORIGINS=http://localhost:8888,http://localhost:3000
+APP_ENV=development
+DEBUG=True
+EOF
+
+# Запустите локально
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+---
+
+## ✅ Чеклист перед деплоем
+
+- [✓] PostgreSQL создан на Railway
+- [✓] Redis создан на Railway
+- [✓] Секретные ключи сгенерированы
+- [ ] OpenAI API ключ получен
+- [ ] Backend репозиторий подключен к Railway
+- [ ] Переменные добавлены в Railway
+- [ ] Деплой запущен
+- [ ] Миграции применены
+- [ ] Health check работает
+
+---
+
+## 🚀 После добавления переменных
+
+1. **Railway автоматически перезапустит** приложение
+2. **Примените миграции:**
+   ```bash
+   railway run alembic upgrade head
+   ```
+3. **Проверьте health:**
+   ```bash
+   curl https://your-app.railway.app/health
+   ```
+4. **Откройте Swagger UI:**
+   ```
+   https://your-app.railway.app/docs
+   ```
+
+---
+
+## 📝 Важные заметки
+
+### DATABASE_URL
+⚠️ Railway предоставляет `postgresql://`, но FastAPI + SQLAlchemy 2.0 требует `postgresql+asyncpg://`
+
+**Было:** `postgresql://postgres:...`  
+**Стало:** `postgresql+asyncpg://postgres:...`
+
+### OPENAI_API_KEY
+Минимально нужен хотя бы один LLM API ключ для тестирования.
+Можно начать только с OpenAI (GPT-3.5-turbo дешевле).
+
+### CORS_ORIGINS
+Добавьте URL вашего фронтенда после его деплоя.
+Можно указать несколько через запятую.
+
+---
+
+**Готово! Добавьте эти переменные в Railway и задеплойте! 🚀**
