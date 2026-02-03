@@ -22,9 +22,9 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
+    POSTGRES_USER: Optional[str] = None  # Optional if using DATABASE_URL
+    POSTGRES_PASSWORD: Optional[str] = None  # Optional if using DATABASE_URL
+    POSTGRES_DB: Optional[str] = None  # Optional if using DATABASE_URL
     
     # Redis
     REDIS_URL: str
