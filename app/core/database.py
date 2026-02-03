@@ -43,9 +43,10 @@ async def get_db():
 
 
 async def init_db():
-    """Initialize database - create all tables"""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Initialize database - tables are created by Alembic migrations"""
+    # NOTE: We use Alembic for migrations, not SQLAlchemy create_all
+    # Tables are created via: alembic upgrade head
+    pass
 
 
 async def close_db():
