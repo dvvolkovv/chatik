@@ -19,10 +19,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create ENUM type for message roles
-    message_role_enum = sa.Enum('USER', 'ASSISTANT', 'SYSTEM', name='messagerole', create_type=True)
-    message_role_enum.create(op.get_bind(), checkfirst=True)
-    
     # Create users table
     op.create_table(
         'users',
