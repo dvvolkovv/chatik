@@ -67,7 +67,6 @@ def upgrade() -> None:
         sa.Column('title', sa.String(255), default='Новый чат', nullable=False),
         sa.Column('folder_id', UUID(as_uuid=True), nullable=True),
         sa.Column('tags', sa.ARRAY(sa.String), nullable=False, server_default='{}'),
-        sa.Column('model', sa.String(100), nullable=False),
         sa.Column('is_favorite', sa.Boolean(), default=False, nullable=False),
         sa.Column('is_deleted', sa.Boolean(), default=False, nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
