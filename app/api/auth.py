@@ -50,6 +50,7 @@ async def register(
         email=user_data.email,
         phone=user_data.phone,
         password_hash=get_password_hash(user_data.password),
+        balance=100.0,  # Стартовый баланс для новых пользователей
     )
     
     db.add(new_user)
