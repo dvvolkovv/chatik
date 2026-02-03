@@ -65,6 +65,8 @@ def upgrade() -> None:
         sa.Column('id', UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column('user_id', UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('title', sa.String(255), default='Новый чат', nullable=False),
+        sa.Column('folder_id', UUID(as_uuid=True), nullable=True),
+        sa.Column('tags', sa.ARRAY(sa.String), nullable=False, server_default='{}'),
         sa.Column('model', sa.String(100), nullable=False),
         sa.Column('is_favorite', sa.Boolean(), default=False, nullable=False),
         sa.Column('is_deleted', sa.Boolean(), default=False, nullable=False),
