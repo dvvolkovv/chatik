@@ -1,14 +1,28 @@
 """
 Main FastAPI application
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import init_db, close_db
 from app.api import auth, chat, profile, llm, files
+
+
+class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
+    """Middleware to handle HTTPS redirects behind proxy"""
+    async def dispatch(self, request: Request, call_next):
+        # Check for X-Forwarded-Proto header (Railway, most proxies)
+        forwarded_proto = request.headers.get("X-Forwarded-Proto")
+        if forwarded_proto:
+            # Update request scheme to match proxy
+            request.scope["scheme"] = forwarded_proto
+        
+        response = await call_next(request)
+        return response
 
 
 @asynccontextmanager
@@ -32,6 +46,9 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# HTTPS Redirect Middleware (must be first to fix scheme before redirects)
+app.add_middleware(HTTPSRedirectMiddleware)
 
 # CORS Middleware
 app.add_middleware(
