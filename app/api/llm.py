@@ -2,21 +2,28 @@
 LLM Integration API endpoints
 """
 from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 import json
+import asyncio
+import logging
+import threading
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.models.user import User
 from app.models.chat import Chat
 from app.models.message import Message, MessageRole
+from app.models.profile import UserProfile
 from app.schemas.message import MessageCreate, MessageResponse, StreamChunk
 from app.services.llm_service import LLMService
+from app.services.profile_extractor import ProfileExtractor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -133,6 +140,117 @@ async def send_message(
         )
 
 
+async def extract_and_update_profile_delayed(
+    user_id: str,
+    chat_id: str,
+    delay_seconds: int = 3
+):
+    """
+    Background task to extract profile information from recent messages
+    Waits for streaming to complete before analyzing
+    
+    Args:
+        user_id: User ID
+        chat_id: Chat ID to analyze
+        delay_seconds: Seconds to wait before extraction
+    """
+    print(f"🔍 [Profile Extraction] Task scheduled for user {user_id}, waiting {delay_seconds}s...")
+    
+    if not settings.PROFILE_EXTRACTION_ENABLED:
+        print(f"⚠️ [Profile Extraction] Disabled in settings")
+        return
+    
+    # Wait for streaming to complete
+    await asyncio.sleep(delay_seconds)
+    
+    try:
+        print(f"✨ [Profile Extraction] Starting extraction for user {user_id}...")
+        logger.info(f"[Profile Extraction] Starting extraction for user {user_id}")
+        
+        # Create new database session for background task
+        async with AsyncSessionLocal() as db:
+            # Get chat with last 2 messages
+            result = await db.execute(
+                select(Chat)
+                .where(Chat.id == chat_id)
+                .options(selectinload(Chat.messages))
+            )
+            chat = result.scalar_one_or_none()
+            
+            if not chat or len(chat.messages) < 2:
+                print(f"⚠️ [Profile Extraction] No messages to analyze")
+                return
+            
+            # Get last user and assistant messages
+            messages = sorted(chat.messages, key=lambda m: m.created_at)
+            last_messages = messages[-2:]
+            
+            user_message = None
+            assistant_message = None
+            for msg in last_messages:
+                if msg.role == MessageRole.USER:
+                    user_message = msg.content
+                elif msg.role == MessageRole.ASSISTANT:
+                    assistant_message = msg.content
+            
+            if not user_message or not assistant_message:
+                print(f"⚠️ [Profile Extraction] Missing user or assistant message")
+                return
+            
+            print(f"📝 [Profile Extraction] Analyzing messages...")
+            
+            # Get user profile
+            result = await db.execute(
+                select(UserProfile).where(UserProfile.user_id == user_id)
+            )
+            profile = result.scalar_one_or_none()
+            
+            # Create profile if doesn't exist
+            if not profile:
+                profile = UserProfile(
+                    user_id=user_id,
+                    values=[],
+                    beliefs=[],
+                    interests=[],
+                    skills=[],
+                    desires=[],
+                    intentions=[],
+                )
+                db.add(profile)
+                await db.flush()
+            
+            # Extract profile data using LLM
+            extractor = ProfileExtractor(settings)
+            extracted_data = await extractor.extract_from_messages(
+                user_message=user_message,
+                assistant_message=assistant_message
+            )
+            
+            # Check if anything was extracted
+            total_extracted = sum(len(v) for v in extracted_data.values())
+            if total_extracted == 0:
+                logger.debug(f"[Profile Extraction] No information extracted from messages")
+                return
+            
+            # Merge with existing profile
+            merged_data = extractor.merge_with_existing(profile, extracted_data)
+            
+            # Update profile
+            profile.interests = merged_data["interests"]
+            profile.skills = merged_data["skills"]
+            profile.values = merged_data["values"]
+            profile.beliefs = merged_data["beliefs"]
+            profile.desires = merged_data["desires"]
+            profile.intentions = merged_data["intentions"]
+            
+            await db.commit()
+            
+            logger.info(f"[Profile Extraction] Successfully updated profile for user {user_id}: {total_extracted} items extracted")
+            
+    except Exception as e:
+        logger.error(f"[Profile Extraction] Error in background task: {e}", exc_info=True)
+
+
 @router.post("/chat/{chat_id}/message/stream")
 async def send_message_stream(
     chat_id: str,
@@ -187,8 +305,41 @@ async def send_message_stream(
     
     async def event_stream() -> AsyncGenerator[str, None]:
         """Generate SSE stream"""
+        print(f"🎬 [Stream] event_stream() started", flush=True)
         llm_service = LLMService(settings)
         accumulated_content = ""
+        final_tokens = {"input": 0, "output": 0}
+        final_cost = 0.0
+        
+        print(f"🎯 [Stream] Creating extraction thread...", flush=True)
+        
+        # Schedule profile extraction to run after stream completes
+        # Using thread so it persists after HTTP connection closes
+        def run_extraction():
+            import asyncio
+            import time
+            time.sleep(5)  # Wait for stream to complete
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                print(f"⏰ [Profile] Thread woke up after sleep, starting extraction...", flush=True)
+                logger.info(f"[Profile] Thread woke up, starting extraction...")
+                loop.run_until_complete(
+                    extract_and_update_profile_delayed(
+                        user_id=str(current_user.id),
+                        chat_id=str(chat.id),
+                        delay_seconds=0  # Already waited 5s
+                    )
+                )
+            except Exception as e:
+                logger.error(f"[Profile] Thread error: {e}", exc_info=True)
+            finally:
+                loop.close()
+        
+        thread = threading.Thread(target=run_extraction, daemon=True)
+        thread.start()
+        print(f"🚀 [Profile] Extraction thread scheduled: {thread.name}", flush=True)
+        logger.info(f"[Profile] Extraction thread scheduled: {thread.name}")
         
         try:
             # Send start event
@@ -200,19 +351,26 @@ async def send_message_stream(
                 messages=chat.messages + [user_message],
                 user_profile=user_profile,
             ):
-                accumulated_content += chunk["content"]
+                # Accumulate content if present
+                if chunk.get("content"):
+                    accumulated_content += chunk["content"]
+                    yield f"data: {json.dumps(StreamChunk(type='content', content=chunk['content']).dict())}\n\n"
                 
-                yield f"data: {json.dumps(StreamChunk(type='content', content=chunk['content']).dict())}\n\n"
+                # Update tokens and cost (will get accurate values in final chunk)
+                if chunk.get("tokens"):
+                    final_tokens = chunk["tokens"]
+                if chunk.get("cost") is not None:
+                    final_cost = chunk["cost"]
             
-            # Save assistant message
+            # Save assistant message with accurate token counts
             assistant_message = Message(
                 chat_id=chat.id,
                 role=MessageRole.ASSISTANT,
                 content=accumulated_content,
                 model_used=message_data.model,
-                tokens_input=chunk.get("tokens", {}).get("input", 0),
-                tokens_output=chunk.get("tokens", {}).get("output", 0),
-                cost=chunk.get("cost", 0.0),
+                tokens_input=final_tokens.get("input", 0),
+                tokens_output=final_tokens.get("output", 0),
+                cost=final_cost,
             )
             db.add(assistant_message)
             
@@ -225,22 +383,51 @@ async def send_message_stream(
                 chat.title = message_data.content[:50] + ("..." if len(message_data.content) > 50 else "")
             
             await db.commit()
-            # No need to refresh - we already have the id
+            logger.info(f"COMMIT DONE - scheduling profile extraction")
             
-            # Send end event (convert UUID to string)
-            yield f"data: {json.dumps(StreamChunk(type='end', message_id=str(assistant_message.id), tokens=chunk.get('tokens'), cost=chunk.get('cost')).dict())}\n\n"
+            # Schedule profile extraction in background using thread
+            # This ensures the task continues even after client disconnects
+            def run_extraction():
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    logger.info(f"Thread starting extraction...")
+                    loop.run_until_complete(
+                        extract_and_update_profile_delayed(
+                            user_id=str(current_user.id),
+                            chat_id=str(chat.id),
+                            delay_seconds=2
+                        )
+                    )
+                except Exception as e:
+                    logger.error(f"Thread extraction error: {e}", exc_info=True)
+                finally:
+                    loop.close()
+            
+            thread = threading.Thread(target=run_extraction, daemon=True)
+            thread.start()
+            logger.info(f"Profile extraction thread started: {thread.name}")
+            
+            # Send end event with accurate stats (convert UUID to string)
+            yield f"data: {json.dumps(StreamChunk(type='end', message_id=str(assistant_message.id), tokens=final_tokens, cost=final_cost).dict())}\n\n"
             
         except Exception as e:
             await db.rollback()
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"❌ Streaming Error: {error_details}")
             yield f"data: {json.dumps(StreamChunk(type='error', error=str(e)).dict())}\n\n"
     
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "Content-Encoding": "none",  # Disable compression
+            "Transfer-Encoding": "chunked",  # Enable chunked transfer
         }
     )
 

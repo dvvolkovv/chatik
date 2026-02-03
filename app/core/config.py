@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     YANDEX_API_KEY: Optional[str] = None
     YANDEX_FOLDER_ID: Optional[str] = None
     
+    # LLM Settings
+    MAX_CONTEXT_MESSAGES: int = 20  # Maximum number of messages to send to LLM as context
+    LLM_TEMPERATURE: float = 0.7  # Temperature for LLM responses (0.0 - 2.0)
+    
+    # Profile Extraction Settings
+    PROFILE_EXTRACTION_ENABLED: bool = True  # Enable automatic profile extraction
+    PROFILE_EXTRACTION_MODEL: str = "openai/gpt-3.5-turbo"  # Cheap model for extraction
+    PROFILE_MIN_MESSAGE_LENGTH: int = 20  # Minimum message length to trigger extraction
+    PROFILE_EXTRACTION_TEMPERATURE: float = 0.3  # Low temperature for accuracy
+    
     # File Storage
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE: int = 52428800  # 50MB

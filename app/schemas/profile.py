@@ -5,26 +5,21 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, UUID4
 
 
-class Value(BaseModel):
-    """Value with weight"""
-    name: str
-    value: int  # 0-100
-
-
-class Skill(BaseModel):
-    """Skill with level"""
-    name: str
-    level: int  # 1-5
-
-
 class ProfileBase(BaseModel):
     """Base profile schema"""
-    values: List[Value] = []
+    # Core attributes
+    values: List[str] = []
     beliefs: List[str] = []
     interests: List[str] = []
-    skills: List[Skill] = []
+    skills: List[str] = []
     desires: List[str] = []
     intentions: List[str] = []
+    
+    # Preferences
+    likes: List[str] = []
+    dislikes: List[str] = []
+    loves: List[str] = []
+    hates: List[str] = []
 
 
 class ProfileCreate(ProfileBase):
@@ -34,12 +29,16 @@ class ProfileCreate(ProfileBase):
 
 class ProfileUpdate(BaseModel):
     """Profile update schema"""
-    values: Optional[List[Value]] = None
+    values: Optional[List[str]] = None
     beliefs: Optional[List[str]] = None
     interests: Optional[List[str]] = None
-    skills: Optional[List[Skill]] = None
+    skills: Optional[List[str]] = None
     desires: Optional[List[str]] = None
     intentions: Optional[List[str]] = None
+    likes: Optional[List[str]] = None
+    dislikes: Optional[List[str]] = None
+    loves: Optional[List[str]] = None
+    hates: Optional[List[str]] = None
 
 
 class ProfileResponse(ProfileBase):

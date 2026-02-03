@@ -24,27 +24,45 @@ class LLMService:
             )
     
     def _build_system_prompt(self, user_profile: Optional[UserProfile]) -> str:
-        """Build system prompt with user profile"""
+        """Build comprehensive system prompt with full user profile"""
         if not user_profile:
             return "Ты полезный AI-ассистент."
         
-        prompt = "Ты полезный AI-ассистент. Вот информация о пользователе:\n\n"
+        prompt = "Ты полезный AI-ассистент. Вот полный профиль пользователя:\n\n"
         
+        # Core attributes
         if user_profile.values:
-            values_str = ", ".join([f"{v['name']} ({v['value']}/100)" for v in user_profile.values])
-            prompt += f"Ценности: {values_str}\n"
+            prompt += f"💎 Ценности: {', '.join(user_profile.values)}\n"
+        
+        if user_profile.beliefs:
+            prompt += f"🌟 Убеждения: {', '.join(user_profile.beliefs)}\n"
         
         if user_profile.interests:
-            prompt += f"Интересы: {', '.join(user_profile.interests)}\n"
+            prompt += f"🎯 Интересы: {', '.join(user_profile.interests)}\n"
         
         if user_profile.skills:
-            skills_str = ", ".join([f"{s['name']} (уровень {s['level']}/5)" for s in user_profile.skills])
-            prompt += f"Навыки: {skills_str}\n"
+            prompt += f"🛠️ Навыки: {', '.join(user_profile.skills)}\n"
         
         if user_profile.desires:
-            prompt += f"Цели: {', '.join(user_profile.desires)}\n"
+            prompt += f"🎓 Цели и желания: {', '.join(user_profile.desires)}\n"
         
-        prompt += "\nУчитывай этот контекст при формировании ответов. Адаптируй примеры и рекомендации под интересы и навыки пользователя."
+        if user_profile.intentions:
+            prompt += f"📍 Текущие намерения: {', '.join(user_profile.intentions)}\n"
+        
+        # Preferences
+        if user_profile.likes:
+            prompt += f"👍 Нравится: {', '.join(user_profile.likes)}\n"
+        
+        if user_profile.dislikes:
+            prompt += f"👎 Не нравится: {', '.join(user_profile.dislikes)}\n"
+        
+        if user_profile.loves:
+            prompt += f"❤️ Любит: {', '.join(user_profile.loves)}\n"
+        
+        if user_profile.hates:
+            prompt += f"🚫 Ненавидит: {', '.join(user_profile.hates)}\n"
+        
+        prompt += "\n📝 ВАЖНО: Используй этот профиль для формирования персонализированных ответов. Адаптируй свои примеры, рекомендации и стиль общения под ценности, интересы и предпочтения пользователя. Избегай тем из списка 'не нравится' и 'ненавидит'."
         
         return prompt
     
@@ -56,8 +74,9 @@ class LLMService:
         system_prompt = self._build_system_prompt(user_profile)
         formatted.append({"role": "system", "content": system_prompt})
         
-        # Add conversation history (last 20 messages to stay within context)
-        for msg in messages[-20:]:
+        # Add conversation history (limit to MAX_CONTEXT_MESSAGES to stay within context)
+        max_messages = self.settings.MAX_CONTEXT_MESSAGES
+        for msg in messages[-max_messages:]:
             formatted.append({
                 "role": msg.role.value,
                 "content": msg.content
@@ -98,7 +117,7 @@ class LLMService:
         response = await self.openrouter_client.chat.completions.create(
             model=model,
             messages=messages,
-            temperature=0.7,
+            temperature=self.settings.LLM_TEMPERATURE,
         )
         
         content = response.choices[0].message.content
@@ -116,26 +135,74 @@ class LLMService:
     
     async def _stream_openrouter(self, model: str, messages: List[Dict]) -> AsyncGenerator:
         """Stream response from OpenRouter"""
-        stream = await self.openrouter_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.7,
-            stream=True,
-        )
+        print(f"🔄 Starting stream for model: {model}")
         
-        total_tokens_input = 0
-        total_tokens_output = 0
-        
-        async for chunk in stream:
-            if chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                total_tokens_output += 1  # Approximate
+        try:
+            stream = await self.openrouter_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=self.settings.LLM_TEMPERATURE,
+                stream=True
+                # Note: stream_options not supported by current OpenAI SDK version
+            )
+            
+            total_tokens_input = 0
+            total_tokens_output = 0
+            accumulated_content = ""
+            chunk_count = 0
+            
+            # Estimate input tokens (approximate: 1 token ≈ 4 characters)
+            input_text = " ".join([msg.get("content", "") for msg in messages])
+            total_tokens_input = len(input_text) // 4
+            
+            async for chunk in stream:
+                chunk_count += 1
                 
-                yield {
-                    "content": content,
-                    "tokens": {"input": total_tokens_input, "output": total_tokens_output},
-                    "cost": self._calculate_cost(model, total_tokens_input, total_tokens_output),
-                }
+                # Handle content chunks
+                if chunk.choices and len(chunk.choices) > 0 and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    accumulated_content += content
+                    total_tokens_output += 1  # Approximate token count
+                    
+                    # Debug log every 10 chunks
+                    if chunk_count % 10 == 0:
+                        print(f"📦 Chunk {chunk_count}: {len(content)} chars, total: {len(accumulated_content)}")
+                    
+                    yield {
+                        "content": content,
+                        "tokens": {"input": total_tokens_input, "output": total_tokens_output},
+                        "cost": self._calculate_cost(model, total_tokens_input, total_tokens_output),
+                    }
+                
+                # Try to get usage data from final chunk (if available)
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    try:
+                        # OpenAI SDK returns usage as an object with attributes
+                        if hasattr(chunk.usage, 'prompt_tokens'):
+                            total_tokens_input = chunk.usage.prompt_tokens or 0
+                            total_tokens_output = chunk.usage.completion_tokens or total_tokens_output
+                        # Or as a dict
+                        elif isinstance(chunk.usage, dict):
+                            total_tokens_input = chunk.usage.get('prompt_tokens', 0)
+                            total_tokens_output = chunk.usage.get('completion_tokens', total_tokens_output)
+                        print(f"📊 Final usage: {total_tokens_input} in, {total_tokens_output} out")
+                    except Exception as e:
+                        print(f"⚠️ Could not extract usage data: {e}")
+            
+            print(f"✅ Stream completed: {chunk_count} chunks, {len(accumulated_content)} total chars")
+            
+            # Yield final chunk with accurate token counts
+            yield {
+                "content": "",
+                "tokens": {"input": total_tokens_input, "output": total_tokens_output},
+                "cost": self._calculate_cost(model, total_tokens_input, total_tokens_output),
+                "final": True
+            }
+        except Exception as e:
+            print(f"❌ Stream error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     
     def _calculate_cost(self, model: str, tokens_input: int, tokens_output: int) -> float:
