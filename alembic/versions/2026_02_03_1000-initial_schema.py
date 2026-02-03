@@ -19,6 +19,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Create ENUM type for message roles
+    message_role_enum = sa.Enum('USER', 'ASSISTANT', 'SYSTEM', name='messagerole', create_type=True)
+    message_role_enum.create(op.get_bind(), checkfirst=True)
+    
     # Create users table
     op.create_table(
         'users',
@@ -78,7 +82,7 @@ def upgrade() -> None:
         'messages',
         sa.Column('id', UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column('chat_id', UUID(as_uuid=True), sa.ForeignKey('chats.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('role', sa.String(20), nullable=False),
+        sa.Column('role', sa.Enum('USER', 'ASSISTANT', 'SYSTEM', name='messagerole'), nullable=False),
         sa.Column('content', sa.Text(), nullable=False),
         
         # Model information
@@ -106,3 +110,6 @@ def downgrade() -> None:
     op.drop_table('chats')
     op.drop_table('user_profiles')
     op.drop_table('users')
+    
+    # Drop ENUM type
+    sa.Enum(name='messagerole').drop(op.get_bind(), checkfirst=True)
