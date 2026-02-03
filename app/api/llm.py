@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload
 import json
 import asyncio
 import logging
-import threading
 
 from app.core.database import get_db, AsyncSessionLocal
 from app.core.security import get_current_user
@@ -314,32 +313,23 @@ async def send_message_stream(
         print(f"🎯 [Stream] Creating extraction thread...", flush=True)
         
         # Schedule profile extraction to run after stream completes
-        # Using thread so it persists after HTTP connection closes
-        def run_extraction():
-            import asyncio
-            import time
-            time.sleep(5)  # Wait for stream to complete
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        # Using asyncio task so it persists after HTTP connection closes
+        async def run_extraction_async():
             try:
-                print(f"⏰ [Profile] Thread woke up after sleep, starting extraction...", flush=True)
-                logger.info(f"[Profile] Thread woke up, starting extraction...")
-                loop.run_until_complete(
-                    extract_and_update_profile_delayed(
-                        user_id=str(current_user.id),
-                        chat_id=str(chat.id),
-                        delay_seconds=0  # Already waited 5s
-                    )
+                await asyncio.sleep(5)  # Wait for stream to complete
+                print(f"⏰ [Profile] Task woke up after sleep, starting extraction...", flush=True)
+                logger.info(f"[Profile] Task woke up, starting extraction...")
+                await extract_and_update_profile_delayed(
+                    user_id=str(current_user.id),
+                    chat_id=str(chat.id),
+                    delay_seconds=0  # Already waited 5s
                 )
             except Exception as e:
-                logger.error(f"[Profile] Thread error: {e}", exc_info=True)
-            finally:
-                loop.close()
+                logger.error(f"[Profile] Task error: {e}", exc_info=True)
         
-        thread = threading.Thread(target=run_extraction, daemon=True)
-        thread.start()
-        print(f"🚀 [Profile] Extraction thread scheduled: {thread.name}", flush=True)
-        logger.info(f"[Profile] Extraction thread scheduled: {thread.name}")
+        task = asyncio.create_task(run_extraction_async())
+        print(f"🚀 [Profile] Extraction task scheduled", flush=True)
+        logger.info(f"[Profile] Extraction task scheduled")
         
         try:
             # Send start event
@@ -385,29 +375,22 @@ async def send_message_stream(
             await db.commit()
             logger.info(f"COMMIT DONE - scheduling profile extraction")
             
-            # Schedule profile extraction in background using thread
+            # Schedule profile extraction in background using asyncio task
             # This ensures the task continues even after client disconnects
-            def run_extraction():
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            async def run_extraction_async():
                 try:
-                    logger.info(f"Thread starting extraction...")
-                    loop.run_until_complete(
-                        extract_and_update_profile_delayed(
-                            user_id=str(current_user.id),
-                            chat_id=str(chat.id),
-                            delay_seconds=2
-                        )
+                    await asyncio.sleep(2)  # Wait for stream to complete
+                    logger.info(f"Task starting extraction...")
+                    await extract_and_update_profile_delayed(
+                        user_id=str(current_user.id),
+                        chat_id=str(chat.id),
+                        delay_seconds=0  # Already waited 2s
                     )
                 except Exception as e:
-                    logger.error(f"Thread extraction error: {e}", exc_info=True)
-                finally:
-                    loop.close()
+                    logger.error(f"Task extraction error: {e}", exc_info=True)
             
-            thread = threading.Thread(target=run_extraction, daemon=True)
-            thread.start()
-            logger.info(f"Profile extraction thread started: {thread.name}")
+            task = asyncio.create_task(run_extraction_async())
+            logger.info(f"Profile extraction task scheduled")
             
             # Send end event with accurate stats (convert UUID to string)
             yield f"data: {json.dumps(StreamChunk(type='end', message_id=str(assistant_message.id), tokens=final_tokens, cost=final_cost).dict())}\n\n"
