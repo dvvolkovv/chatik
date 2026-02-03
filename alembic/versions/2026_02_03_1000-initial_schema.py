@@ -80,6 +80,19 @@ def upgrade() -> None:
         sa.Column('chat_id', UUID(as_uuid=True), sa.ForeignKey('chats.id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('role', sa.String(20), nullable=False),
         sa.Column('content', sa.Text(), nullable=False),
+        
+        # Model information
+        sa.Column('model_used', sa.String(100), nullable=True),
+        
+        # Token usage
+        sa.Column('tokens_input', sa.Integer(), default=0, nullable=False),
+        sa.Column('tokens_output', sa.Integer(), default=0, nullable=False),
+        sa.Column('cost', sa.Float(), default=0.0, nullable=False),
+        
+        # Attachments and metadata
+        sa.Column('attachments', JSONB, nullable=False, server_default='[]'),
+        sa.Column('message_metadata', JSONB, nullable=False, server_default='{}'),
+        
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     )
 
