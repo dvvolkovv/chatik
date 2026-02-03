@@ -36,6 +36,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY ./app ./app
 COPY ./alembic ./alembic
 COPY ./alembic.ini .
+COPY ./start.sh .
+RUN chmod +x /app/start.sh
 
 # Create uploads directory
 RUN mkdir -p /app/uploads
