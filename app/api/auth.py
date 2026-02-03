@@ -64,6 +64,10 @@ async def register(
         skills=[],
         desires=[],
         intentions=[],
+        likes=[],
+        dislikes=[],
+        loves=[],
+        hates=[],
     )
     
     db.add(new_profile)
