@@ -28,9 +28,11 @@ def upgrade() -> None:
         sa.Column('password_hash', sa.String(255), nullable=False),
         sa.Column('balance', sa.Numeric(10, 2), default=0.0, nullable=False),
         sa.Column('is_active', sa.Boolean(), default=True, nullable=False),
+        sa.Column('is_verified', sa.Boolean(), default=False, nullable=False),
         sa.Column('is_superuser', sa.Boolean(), default=False, nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=False),
+        sa.Column('last_login_at', sa.DateTime(timezone=True), nullable=True),
     )
 
     # Create user_profiles table with ALL fields
