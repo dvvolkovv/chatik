@@ -423,7 +423,7 @@ async def send_message_stream(
 @router.get("/models")
 async def get_available_models():
     """
-    Get list of available LLM models via OpenRouter (24 models including Gemini, Grok, DeepSeek)
+    Get list of available LLM models via OpenRouter (23 models including Gemini, Grok, DeepSeek)
     """
     models = [
         # Tier 1: Premium Models
@@ -653,21 +653,11 @@ async def get_available_models():
         },
         {
             "id": "deepseek/deepseek-chat",
-            "name": "DeepSeek Chat V3",
+            "name": "DeepSeek Chat",
             "provider": "DeepSeek",
             "price_input": 0.0003,
             "price_output": 0.0012,
             "context_length": 163840,
-            "capabilities": ["text", "reasoning"],
-            "tier": "budget",
-        },
-        {
-            "id": "deepseek/deepseek-chat-v3.1",
-            "name": "DeepSeek Chat V3.1",
-            "provider": "DeepSeek",
-            "price_input": 0.00015,
-            "price_output": 0.00075,
-            "context_length": 32768,
             "capabilities": ["text", "reasoning"],
             "tier": "budget",
         },
