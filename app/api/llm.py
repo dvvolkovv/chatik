@@ -234,13 +234,17 @@ async def extract_and_update_profile_delayed(
             # Merge with existing profile
             merged_data = extractor.merge_with_existing(profile, extracted_data)
             
-            # Update profile
-            profile.interests = merged_data["interests"]
-            profile.skills = merged_data["skills"]
+            # Update profile (all 10 fields)
             profile.values = merged_data["values"]
             profile.beliefs = merged_data["beliefs"]
+            profile.interests = merged_data["interests"]
+            profile.skills = merged_data["skills"]
             profile.desires = merged_data["desires"]
             profile.intentions = merged_data["intentions"]
+            profile.likes = merged_data["likes"]
+            profile.dislikes = merged_data["dislikes"]
+            profile.loves = merged_data["loves"]
+            profile.hates = merged_data["hates"]
             
             await db.commit()
             
