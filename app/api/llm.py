@@ -2,6 +2,7 @@
 LLM Integration API endpoints
 """
 from typing import AsyncGenerator
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,7 +104,7 @@ async def send_message(
         current_user.balance -= response["cost"]
         
         # Update chat
-        chat.updated_at = assistant_message.created_at
+        chat.updated_at = datetime.utcnow()
         if chat.title == "Новый чат" and len(chat.messages) == 0:
             # Auto-generate title from first message
             chat.title = message_data.content[:50] + ("..." if len(message_data.content) > 50 else "")
@@ -372,7 +373,7 @@ async def send_message_stream(
             current_user.balance -= assistant_message.cost
             
             # Update chat
-            chat.updated_at = assistant_message.created_at
+            chat.updated_at = datetime.utcnow()
             if chat.title == "Новый чат":
                 chat.title = message_data.content[:50] + ("..." if len(message_data.content) > 50 else "")
             
