@@ -423,7 +423,7 @@ async def send_message_stream(
 @router.get("/models")
 async def get_available_models():
     """
-    Get list of available LLM models via OpenRouter (Top 20)
+    Get list of available LLM models via OpenRouter (Top 22 including latest Gemini & Grok)
     """
     models = [
         # Tier 1: Premium Models
@@ -509,6 +509,26 @@ async def get_available_models():
         },
         
         # Tier 2: Balanced Models
+        {
+            "id": "google/gemini-2.0-flash-001",
+            "name": "Gemini 2.0 Flash",
+            "provider": "Google",
+            "price_input": 0.0001,
+            "price_output": 0.0004,
+            "context_length": 1048576,
+            "capabilities": ["text", "vision", "audio", "video"],
+            "tier": "balanced",
+        },
+        {
+            "id": "x-ai/grok-2-1212",
+            "name": "Grok 2 1212",
+            "provider": "xAI",
+            "price_input": 0.002,
+            "price_output": 0.010,
+            "context_length": 131072,
+            "capabilities": ["text", "reasoning"],
+            "tier": "balanced",
+        },
         {
             "id": "openai/gpt-3.5-turbo",
             "name": "GPT-3.5 Turbo",
