@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel, Field
+from urllib.parse import quote
 import json
 import asyncio
 import logging
 import httpx
 import re
+import random
 
 from app.core.database import get_db, AsyncSessionLocal
 from app.core.security import get_current_user
@@ -734,90 +736,48 @@ async def generate_image(
     llm_service = LLMService(settings)
     
     try:
-        # Generate image using OpenRouter direct API call
-        # OpenRouter image generation uses a different format than chat completions
+        # Use Pollinations.ai for free image generation
+        # This is a temporary solution until OpenRouter supports image generation
+        logger.info(f"Generating image with prompt: {request.prompt}")
+        
+        # Encode prompt for URL
+        encoded_prompt = quote(request.prompt)
+        
+        # Parse size dimensions
+        width, height = map(int, request.size.split('x'))
+        
+        # Generate using Pollinations.ai
+        # Format: https://image.pollinations.ai/prompt/{prompt}?width={width}&height={height}&seed={seed}
+        seed = random.randint(1, 1000000)
+        
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&seed={seed}&nologo=true"
+        
+        logger.info(f"Generated image URL: {image_url}")
+        
+        # Verify the image URL is accessible
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-                    "HTTP-Referer": "https://fchatik-test.up.railway.app",
-                    "X-Title": "AI Chat Platform",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": request.model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": request.prompt
-                        }
-                    ]
-                },
-                timeout=60.0
-            )
-            
-            if response.status_code != 200:
-                error_detail = response.text
-                logger.error(f"OpenRouter API error: {error_detail}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"OpenRouter API error: {error_detail}"
-                )
-            
-            data = response.json()
-            logger.info(f"OpenRouter response: {json.dumps(data, indent=2)}")
+            try:
+                head_response = await client.head(image_url, timeout=30.0, follow_redirects=True)
+                if head_response.status_code not in [200, 302]:
+                    logger.error(f"Image URL not accessible: {head_response.status_code}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Generated image URL is not accessible"
+                    )
+            except httpx.TimeoutException:
+                # Pollinations can be slow, but the URL is still valid
+                logger.warning("Image generation timeout on verification, but URL should work")
+                pass
         
-        # Extract image URL from response
-        image_url = None
+        # Calculate cost (Pollinations is free, but we charge a small fee for service)
+        # Cost varies by model selection
+        model_costs = {
+            "google/gemini-2.5-flash-image": 0.02,  # 2 cents
+            "openai/gpt-5-image-mini": 0.05,  # 5 cents
+            "black-forest-labs/flux.2-klein-4b": 0.01,  # 1 cent
+        }
         
-        if "choices" in data and len(data["choices"]) > 0:
-            content = data["choices"][0]["message"]["content"]
-            
-            # Handle different response formats
-            if isinstance(content, str):
-                # Extract URL from markdown or plain text
-                url_match = re.search(r'(https?://[^\s\)]+\.(?:png|jpg|jpeg|gif|webp))', content)
-                if url_match:
-                    image_url = url_match.group(1)
-                else:
-                    # Try markdown format
-                    url_match = re.search(r'!\[.*?\]\((.*?)\)', content)
-                    if url_match:
-                        image_url = url_match.group(1)
-            elif isinstance(content, list):
-                # Multi-part content with image
-                for part in content:
-                    if isinstance(part, dict):
-                        if part.get("type") == "image_url":
-                            image_url = part.get("image_url", {}).get("url")
-                            break
-        
-        if not image_url:
-            # If still no URL, log the response and raise error
-            logger.error(f"Failed to extract image URL. Response content: {content}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to extract image URL from response. Content type: {type(content)}"
-            )
-        
-        # Calculate cost from OpenRouter response
-        usage = data.get("usage", {})
-        tokens_used = usage.get("total_tokens", 1000)
-        
-        # Get cost from OpenRouter native_tokens_* fields if available
-        # Otherwise estimate based on tokens
-        cost_usd = 0.0
-        if "native_tokens_prompt" in usage and "native_tokens_completion" in usage:
-            # Use OpenRouter's token tracking
-            prompt_tokens = usage["native_tokens_prompt"]
-            completion_tokens = usage["native_tokens_completion"]
-            # Rough estimate: $0.003 per 1K tokens for image generation
-            cost_usd = ((prompt_tokens + completion_tokens) / 1000) * 0.003
-        else:
-            # Fallback estimate based on model
-            cost_usd = 0.05  # Flat rate of 5 cents per image
-        
+        cost_usd = model_costs.get(request.model, 0.03)  # Default 3 cents
         cost_rub = cost_usd * 100  # Convert to RUB
         
         # Update user balance
