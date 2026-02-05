@@ -754,20 +754,8 @@ async def generate_image(
         
         logger.info(f"Generated image URL: {image_url}")
         
-        # Verify the image URL is accessible
-        async with httpx.AsyncClient() as client:
-            try:
-                head_response = await client.head(image_url, timeout=30.0, follow_redirects=True)
-                if head_response.status_code not in [200, 302]:
-                    logger.error(f"Image URL not accessible: {head_response.status_code}")
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Generated image URL is not accessible"
-                    )
-            except httpx.TimeoutException:
-                # Pollinations can be slow, but the URL is still valid
-                logger.warning("Image generation timeout on verification, but URL should work")
-                pass
+        # Pollinations.ai generates images on-demand when the URL is accessed
+        # No need to verify - the URL is always valid and will generate the image when loaded
         
         # Calculate cost (Pollinations is free, but we charge a small fee for service)
         # Cost varies by model selection
