@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
+from pydantic import BaseModel, Field
 import json
 import asyncio
 import logging
@@ -26,6 +27,13 @@ from app.services.profile_extractor import ProfileExtractor
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# Request schema for image generation
+class ImageGenerationRequest(BaseModel):
+    prompt: str = Field(..., description="Text description for image generation")
+    model: str = Field(default="google/gemini-2.5-flash-image", description="Image generation model ID")
+    size: str = Field(default="1024x1024", description="Image size (e.g., '1024x1024', '1024x1792')")
 
 
 @router.post("/chat/{chat_id}/message")
@@ -700,9 +708,7 @@ async def get_available_models():
 
 @router.post("/generate-image")
 async def generate_image(
-    prompt: str,
-    model: str = "google/gemini-2.5-flash-image",
-    size: str = "1024x1024",
+    request: ImageGenerationRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -727,15 +733,15 @@ async def generate_image(
     
     try:
         # Parse size
-        width, height = map(int, size.split('x'))
+        width, height = map(int, request.size.split('x'))
         
         # Generate image using OpenRouter
         response = await llm_service.openrouter_client.chat.completions.create(
-            model=model,
+            model=request.model,
             messages=[
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": request.prompt
                 }
             ],
             modalities=["text", "image"],
@@ -782,9 +788,9 @@ async def generate_image(
         
         return {
             "image_url": image_url,
-            "prompt": prompt,
-            "model": model,
-            "size": size,
+            "prompt": request.prompt,
+            "model": request.model,
+            "size": request.size,
             "cost": cost_rub,
             "balance": current_user.balance
         }
