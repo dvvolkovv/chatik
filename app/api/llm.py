@@ -423,7 +423,7 @@ async def send_message_stream(
 @router.get("/models")
 async def get_available_models():
     """
-    Get list of available LLM models via OpenRouter (23 models including Gemini, Grok, DeepSeek)
+    Get list of available models via OpenRouter (26 models: 23 text/chat + 3 image generation)
     """
     models = [
         # Tier 1: Premium Models
@@ -661,6 +661,137 @@ async def get_available_models():
             "capabilities": ["text", "reasoning"],
             "tier": "budget",
         },
+        
+        # Image Generation Models
+        {
+            "id": "google/gemini-2.5-flash-image",
+            "name": "Gemini 2.5 Flash Image",
+            "provider": "Google",
+            "price_input": 0.0003,
+            "price_output": 0.0025,
+            "context_length": 33000,
+            "capabilities": ["text", "image-generation", "image-editing"],
+            "tier": "image-gen",
+        },
+        {
+            "id": "openai/gpt-5-image-mini",
+            "name": "GPT-5 Image Mini",
+            "provider": "OpenAI",
+            "price_input": 0.0025,
+            "price_output": 0.002,
+            "context_length": 400000,
+            "capabilities": ["text", "image-generation", "image-editing"],
+            "tier": "image-gen",
+        },
+        {
+            "id": "black-forest-labs/flux.2-klein-4b",
+            "name": "FLUX.2 Klein 4B",
+            "provider": "Black Forest Labs",
+            "price_input": 0.0,
+            "price_output": 0.014,  # per first megapixel
+            "context_length": 41000,
+            "capabilities": ["image-generation"],
+            "tier": "image-gen",
+        },
     ]
     
     return {"models": models, "gateway": "OpenRouter"}
+
+
+@router.post("/generate-image")
+async def generate_image(
+    prompt: str,
+    model: str = "google/gemini-2.5-flash-image",
+    size: str = "1024x1024",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate an image using OpenRouter image generation models
+    
+    - **prompt**: Text description for image generation
+    - **model**: Image generation model ID
+    - **size**: Image size (e.g., "1024x1024", "1024x1792")
+    
+    Returns the generated image URL
+    """
+    # Check balance
+    if current_user.balance < 1.0:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Insufficient balance for image generation"
+        )
+    
+    # Initialize LLM service
+    llm_service = LLMService(settings)
+    
+    try:
+        # Parse size
+        width, height = map(int, size.split('x'))
+        
+        # Generate image using OpenRouter
+        response = await llm_service.openrouter_client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            modalities=["text", "image"],
+            max_tokens=1024,
+        )
+        
+        # Extract image URL from response
+        # OpenRouter returns image in different formats depending on the model
+        image_url = None
+        content = response.choices[0].message.content
+        
+        # Check if content has image data
+        if hasattr(response.choices[0].message, 'content') and response.choices[0].message.content:
+            # Handle different response formats
+            if isinstance(content, str):
+                # Some models return markdown with image URL
+                import re
+                url_match = re.search(r'!\[.*?\]\((.*?)\)', content)
+                if url_match:
+                    image_url = url_match.group(1)
+            elif isinstance(content, list):
+                # Multi-part content with image
+                for part in content:
+                    if hasattr(part, 'type') and part.type == 'image_url':
+                        image_url = part.image_url.url
+                        break
+        
+        if not image_url:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to extract image URL from response"
+            )
+        
+        # Calculate cost (approximate)
+        tokens_used = response.usage.total_tokens if response.usage else 1000
+        cost = (tokens_used / 1000) * 0.005  # Approximate cost in USD
+        cost_rub = cost * 100  # Convert to RUB
+        
+        # Update user balance
+        current_user.balance -= cost_rub
+        await db.commit()
+        
+        logger.info(f"Image generated for user {current_user.id}, cost: {cost_rub} RUB")
+        
+        return {
+            "image_url": image_url,
+            "prompt": prompt,
+            "model": model,
+            "size": size,
+            "cost": cost_rub,
+            "balance": current_user.balance
+        }
+        
+    except Exception as e:
+        logger.error(f"Image generation error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image generation failed: {str(e)}"
+        )
