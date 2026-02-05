@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 import json
 import asyncio
 import logging
+import httpx
+import re
 
 from app.core.database import get_db, AsyncSessionLocal
 from app.core.security import get_current_user
@@ -732,53 +734,91 @@ async def generate_image(
     llm_service = LLMService(settings)
     
     try:
-        # Parse size
-        width, height = map(int, request.size.split('x'))
-        
-        # Generate image using OpenRouter
-        response = await llm_service.openrouter_client.chat.completions.create(
-            model=request.model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": request.prompt
-                }
-            ],
-            modalities=["text", "image"],
-            max_tokens=1024,
-        )
+        # Generate image using OpenRouter direct API call
+        # OpenRouter image generation uses a different format than chat completions
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                    "HTTP-Referer": "https://fchatik-test.up.railway.app",
+                    "X-Title": "AI Chat Platform",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": request.model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": request.prompt
+                        }
+                    ]
+                },
+                timeout=60.0
+            )
+            
+            if response.status_code != 200:
+                error_detail = response.text
+                logger.error(f"OpenRouter API error: {error_detail}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"OpenRouter API error: {error_detail}"
+                )
+            
+            data = response.json()
+            logger.info(f"OpenRouter response: {json.dumps(data, indent=2)}")
         
         # Extract image URL from response
-        # OpenRouter returns image in different formats depending on the model
         image_url = None
-        content = response.choices[0].message.content
         
-        # Check if content has image data
-        if hasattr(response.choices[0].message, 'content') and response.choices[0].message.content:
+        if "choices" in data and len(data["choices"]) > 0:
+            content = data["choices"][0]["message"]["content"]
+            
             # Handle different response formats
             if isinstance(content, str):
-                # Some models return markdown with image URL
-                import re
-                url_match = re.search(r'!\[.*?\]\((.*?)\)', content)
+                # Extract URL from markdown or plain text
+                url_match = re.search(r'(https?://[^\s\)]+\.(?:png|jpg|jpeg|gif|webp))', content)
                 if url_match:
                     image_url = url_match.group(1)
+                else:
+                    # Try markdown format
+                    url_match = re.search(r'!\[.*?\]\((.*?)\)', content)
+                    if url_match:
+                        image_url = url_match.group(1)
             elif isinstance(content, list):
                 # Multi-part content with image
                 for part in content:
-                    if hasattr(part, 'type') and part.type == 'image_url':
-                        image_url = part.image_url.url
-                        break
+                    if isinstance(part, dict):
+                        if part.get("type") == "image_url":
+                            image_url = part.get("image_url", {}).get("url")
+                            break
         
         if not image_url:
+            # If still no URL, log the response and raise error
+            logger.error(f"Failed to extract image URL. Response content: {content}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to extract image URL from response"
+                detail=f"Failed to extract image URL from response. Content type: {type(content)}"
             )
         
-        # Calculate cost (approximate)
-        tokens_used = response.usage.total_tokens if response.usage else 1000
-        cost = (tokens_used / 1000) * 0.005  # Approximate cost in USD
-        cost_rub = cost * 100  # Convert to RUB
+        # Calculate cost from OpenRouter response
+        usage = data.get("usage", {})
+        tokens_used = usage.get("total_tokens", 1000)
+        
+        # Get cost from OpenRouter native_tokens_* fields if available
+        # Otherwise estimate based on tokens
+        cost_usd = 0.0
+        if "native_tokens_prompt" in usage and "native_tokens_completion" in usage:
+            # Use OpenRouter's token tracking
+            prompt_tokens = usage["native_tokens_prompt"]
+            completion_tokens = usage["native_tokens_completion"]
+            # Rough estimate: $0.003 per 1K tokens for image generation
+            cost_usd = ((prompt_tokens + completion_tokens) / 1000) * 0.003
+        else:
+            # Fallback estimate based on model
+            cost_usd = 0.05  # Flat rate of 5 cents per image
+        
+        cost_rub = cost_usd * 100  # Convert to RUB
         
         # Update user balance
         current_user.balance -= cost_rub
